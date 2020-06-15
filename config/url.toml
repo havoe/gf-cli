@@ -15,3 +15,14 @@
 		"https://goproxy.io/",
 		"https://goproxy.cn/"
 	]
+
+# Database.
+[database]
+    link  = "mysql:root:root@tcp(127.0.0.1:3306)/suyuan"
+    debug = true
+    # Database logger.
+    [database.logger]
+        Path   = "/tmp/log/gf-app/sql"
+        Level  = "all"
+        Stdout = true
+# Redis数据库配置

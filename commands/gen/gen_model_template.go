@@ -7,6 +7,71 @@ const templateIndexContent = `
 
 package {TplPackageName}
 
+{TplPackageImports}
 // Fill with you ideas below.
 
+`
+
+const templateAddReqContent = `
+
+//新增页面请求参数
+{AddReqContent}
+
+`
+
+const templateEditReqContent = `
+
+//修改页面请求参数
+{EditReqContent}
+`
+
+const templateSelectPageReqContent = `
+
+//分页请求参数
+{SelectPageReqContent}
+`
+
+const templateSelectListByPageContent = `
+//根据条件分页查询数据
+func SelectListByPage(param *SelectPageReq) ([]Entity, *page.Paging, error) {
+	db, err := gdb.Instance()
+
+	if err != nil {
+		return nil, nil, gerror.New("获取数据库连接失败")
+	}
+
+	model := db.Table("{table} t")
+
+	if param != nil {    
+		             
+		    
+		if param.BeginTime != "" {
+			model.Where("date_format(t.create_time,'%y%m%d') >= date_format(?,'%y%m%d') ", param.BeginTime)
+		}
+
+		if param.EndTime != "" {
+			model.Where("date_format(t.create_time,'%y%m%d') <= date_format(?,'%y%m%d') ", param.EndTime)
+		}
+	}
+
+	total, err := model.Count()
+
+	if err != nil {
+		return nil, nil, gerror.New("读取行数失败")
+	}
+
+	page := page.CreatePaging(param.PageNum, param.PageSize, total)
+
+	model.Limit(page.StartNum, page.Pagesize)
+
+	if param.OrderByColumn != "" {
+		model.Order(param.OrderByColumn + " " + param.IsAsc)
+	}
+
+	var result []Entity
+	model.Structs(&result)
+	return result, page, nil
+	
+
+}
 `

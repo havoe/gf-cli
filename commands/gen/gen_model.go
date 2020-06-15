@@ -130,19 +130,44 @@ import (
 	// index
 	path := gfile.Join(folderPath, packageName, fileName+".go")
 	if !gfile.Exists(path) {
+		modelPackageImports := gstr.Trim(`
+import (
+	
+	"suyuan/app/model/page"
+	"github.com/gogf/gf/errors/gerror"
+	"github.com/gogf/gf/database/gdb"
+	"github.com/gogf/gf/os/gtime"
+)`)
+		//空白model
 		indexContent := gstr.ReplaceByMap(templateIndexContent, g.MapStrStr{
 			"{TplTableName}":      table,
 			"{TplModelName}":      camelName,
 			"{TplGroupName}":      groupName,
 			"{TplPackageName}":    packageName,
-			"{TplPackageImports}": packageImports,
+			"{TplPackageImports}": modelPackageImports,
 			"{TplStructDefine}":   structDefine,
 		})
+
+		//增加，修改，分页查询，分页查询搜索
+		indexContent += gstr.ReplaceByMap(templateAddReqContent, g.MapStrStr{
+			"{AddReqContent}": generateAddReqDefinition(fieldMap),
+		})
+		indexContent += gstr.ReplaceByMap(templateEditReqContent, g.MapStrStr{
+			"{EditReqContent}": generateEditReqDefinition(fieldMap),
+		})
+		indexContent += gstr.ReplaceByMap(templateSelectPageReqContent, g.MapStrStr{
+			"{SelectPageReqContent}": generateSelectPageReqDefinition(fieldMap),
+		})
+		indexContent += gstr.ReplaceByMap(templateSelectListByPageContent, g.MapStrStr{
+			"{table}": table,
+		})
+
 		if err := gfile.PutContents(path, strings.TrimSpace(indexContent)); err != nil {
 			mlog.Fatalf("writing content to '%s' failed: %v", path, err)
 		} else {
 			mlog.Print("generated:", path)
 		}
+
 	}
 	// entity
 	path = gfile.Join(folderPath, packageName, fileName+"_entity.go")
@@ -182,8 +207,10 @@ import (
 func generateStructDefinition(fieldMap map[string]*gdb.TableField) string {
 	buffer := bytes.NewBuffer(nil)
 	array := make([][]string, len(fieldMap))
+	//arrayReq := make([][]string, len(fieldMap))
 	for _, field := range fieldMap {
 		array[field.Index] = generateStructField(field)
+		//arrayReq[field.Index] = generateStructField(field,true)
 	}
 	tw := tablewriter.NewWriter(buffer)
 	tw.SetBorder(false)
@@ -192,6 +219,8 @@ func generateStructDefinition(fieldMap map[string]*gdb.TableField) string {
 	tw.SetColumnSeparator("")
 	tw.AppendBulk(array)
 	tw.Render()
+
+	//这里生成 Entity struct
 	stContent := buffer.String()
 	// Let's do this hack of table writer for indent!
 	stContent = gstr.Replace(stContent, "  #", "")
@@ -199,11 +228,11 @@ func generateStructDefinition(fieldMap map[string]*gdb.TableField) string {
 	buffer.WriteString("type Entity struct {\n")
 	buffer.WriteString(stContent)
 	buffer.WriteString("}")
+
 	return buffer.String()
 }
 
-// generateStructField generates and returns the attribute definition for specified field.
-func generateStructField(field *gdb.TableField) []string {
+func handleTableField(field *gdb.TableField) (string, string, string, string) {
 	var typeName, ormTag, jsonTag, comment string
 	t, _ := gregex.ReplaceString(`\(.+\)`, "", field.Type)
 	t = gstr.Split(gstr.Trim(t), " ")[0]
@@ -267,6 +296,29 @@ func generateStructField(field *gdb.TableField) []string {
 		"\r", " ",
 	})
 	comment = gstr.Trim(comment)
+	return typeName, ormTag, jsonTag, comment
+}
+
+// generateStructField generates and returns the attribute definition for specified field.
+func generateStructField(field *gdb.TableField) []string {
+
+	typeName, ormTag, jsonTag, comment := handleTableField(field)
+	//
+	//if req{
+	//	if typeName == "*gtime.Time"{
+	//		typeName = "string"
+	//	}
+	//	if !gstr.ContainsI(field.Key, "pri") {
+	//		return []string{
+	//			"    #" + gstr.CamelCase(field.Name),
+	//			" #" + typeName,
+	//			" #" + fmt.Sprintf("`"+`p:"%s" v:"required#%s不能为空"`+"`", jsonTag,comment),
+	//			" #" + fmt.Sprintf(`// %s`, comment),
+	//		}
+	//	}
+	//	return []string{}
+	//
+	//}
 	return []string{
 		"    #" + gstr.CamelCase(field.Name),
 		" #" + typeName,
@@ -274,6 +326,139 @@ func generateStructField(field *gdb.TableField) []string {
 		" #" + fmt.Sprintf(`json:"%s"`+"`", jsonTag),
 		" #" + fmt.Sprintf(`// %s`, comment),
 	}
+}
+
+//新增页面请求参数
+func generateAddReqField(field *gdb.TableField) []string {
+	typeName, ormTag, jsonTag, comment := handleTableField(field)
+	if typeName == "*gtime.Time" {
+		typeName = "string"
+	}
+
+	if gstr.ContainsI(ormTag, "pri") {
+		return []string{}
+	}
+
+	return []string{
+		"    #" + gstr.CamelCase(field.Name),
+		" #" + typeName,
+		" #" + fmt.Sprintf("`"+`p:"%s"`, jsonTag),
+		" #" + fmt.Sprintf(`v:"required#%s不能为空"`+"`", comment),
+		" #" + fmt.Sprintf(`// %s`, comment),
+	}
+}
+
+func generateAddReqDefinition(fieldMap map[string]*gdb.TableField) string {
+	buffer := bytes.NewBuffer(nil)
+	array := make([][]string, len(fieldMap))
+	for _, field := range fieldMap {
+		array[field.Index] = generateAddReqField(field)
+	}
+	tw := tablewriter.NewWriter(buffer)
+	tw.SetBorder(false)
+	tw.SetRowLine(false)
+	tw.SetAutoWrapText(false)
+	tw.SetColumnSeparator("")
+	tw.AppendBulk(array)
+	tw.Render()
+
+	stContent := buffer.String()
+	// Let's do this hack of table writer for indent!
+	stContent = gstr.Replace(stContent, "  #", "")
+	buffer.Reset()
+	buffer.WriteString("type AddReq struct  {\n")
+	buffer.WriteString(stContent)
+	buffer.WriteString("}")
+	return buffer.String()
+
+}
+
+//修改页面请求参数
+func generateEditReqField(field *gdb.TableField) []string {
+	typeName, _, jsonTag, comment := handleTableField(field)
+	if typeName == "*gtime.Time" {
+		typeName = "string"
+	}
+	return []string{
+		"    #" + gstr.CamelCase(field.Name),
+		" #" + typeName,
+		" #" + fmt.Sprintf("`"+`p:"%s"`, jsonTag),
+		" #" + fmt.Sprintf(`v:"required#%s不能为空"`+"`", comment),
+		" #" + fmt.Sprintf(`// %s`, comment),
+	}
+}
+
+//修改页面请求参数
+func generateEditReqDefinition(fieldMap map[string]*gdb.TableField) string {
+	buffer := bytes.NewBuffer(nil)
+	array := make([][]string, len(fieldMap))
+	for _, field := range fieldMap {
+		array[field.Index] = generateEditReqField(field)
+	}
+	tw := tablewriter.NewWriter(buffer)
+	tw.SetBorder(false)
+	tw.SetRowLine(false)
+	tw.SetAutoWrapText(false)
+	tw.SetColumnSeparator("")
+	tw.AppendBulk(array)
+	tw.Render()
+
+	stContent := buffer.String()
+	// Let's do this hack of table writer for indent!
+	stContent = gstr.Replace(stContent, "  #", "")
+	buffer.Reset()
+	buffer.WriteString("type EditReq struct {\n")
+	buffer.WriteString(stContent)
+	buffer.WriteString("}")
+	return buffer.String()
+}
+
+//分页请求参数
+func generateSelectPageReqField(field *gdb.TableField) []string {
+	typeName, _, jsonTag, comment := handleTableField(field)
+	if typeName == "*gtime.Time" {
+		typeName = "string"
+	}
+	return []string{
+		"    #" + gstr.CamelCase(field.Name),
+		" #" + typeName,
+		" #" + fmt.Sprintf("`"+`p:"%s"`, jsonTag),
+		" #" + fmt.Sprintf(`v:"required#%s不能为空"`+"`", comment),
+		" #" + fmt.Sprintf(`// %s`, comment),
+	}
+}
+
+//分页请求参数
+func generateSelectPageReqDefinition(fieldMap map[string]*gdb.TableField) string {
+	buffer := bytes.NewBuffer(nil)
+	array := make([][]string, len(fieldMap))
+	for _, field := range fieldMap {
+		array[field.Index] = generateSelectPageReqField(field)
+	}
+	tw := tablewriter.NewWriter(buffer)
+	tw.SetBorder(false)
+	tw.SetRowLine(false)
+	tw.SetAutoWrapText(false)
+	tw.SetColumnSeparator("")
+	tw.AppendBulk(array)
+	tw.Render()
+
+	stContent := buffer.String()
+	// Let's do this hack of table writer for indent!
+	stContent = gstr.Replace(stContent, "  #", "")
+	buffer.Reset()
+	buffer.WriteString("type SelectPageReq struct {\n")
+	buffer.WriteString(stContent)
+
+	buffer.WriteString("	BeginTime  string 	`p:\"beginTime\"` //开始时间 \n")
+	buffer.WriteString("	EndTime    string 	`p:\"endTime\"` //结束时间 \n")
+	buffer.WriteString("	PageNum    int    	`p:\"pageNum\"` //当前页码 \n")
+	buffer.WriteString("	PageSize   int    	`p:\"pageSize\"` //每页数 \n")
+	buffer.WriteString("	OrderByColumn string `p:\"orderByColumn\"` //排序字段 \n")
+	buffer.WriteString("	IsAsc         string `p:\"isAsc\"` //排序方式 \n")
+	buffer.WriteString("}")
+
+	return buffer.String()
 }
 
 // generateColumnDefinition generates and returns the column names definition for specified table.
