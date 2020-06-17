@@ -28,6 +28,7 @@ OPTION
 
 EXAMPLES
     gf gen model
+	gf gen controller
     gf gen model -l "mysql:root:12345678@tcp(127.0.0.1:3306)/test"
     gf gen model ./model -l "mssql:sqlserver://sa:12345678@127.0.0.1:1433?database=test"
     gf gen model ./model -c config.yaml -g user-center -t user,user_detail,user_login
@@ -60,5 +61,11 @@ func Run() {
 	switch genType {
 	case "model":
 		doGenModel(parser)
+	case "controller":
+		doGenController(parser)
+	case "router":
+		doGenRouter(parser)
+
+
 	}
 }

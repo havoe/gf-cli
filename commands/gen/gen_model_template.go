@@ -25,6 +25,12 @@ const templateEditReqContent = `
 {EditReqContent}
 `
 
+const templateDeleteReqContent = `
+//删除请求
+{DeleteReqContent}
+`
+
+
 const templateSelectPageReqContent = `
 
 //分页请求参数

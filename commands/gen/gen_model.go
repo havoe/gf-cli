@@ -133,10 +133,9 @@ import (
 		modelPackageImports := gstr.Trim(`
 import (
 	
-	"suyuan/app/model/page"
+	"suyuan/app/utils/page"
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/database/gdb"
-	"github.com/gogf/gf/os/gtime"
 )`)
 		//空白model
 		indexContent := gstr.ReplaceByMap(templateIndexContent, g.MapStrStr{
@@ -155,6 +154,11 @@ import (
 		indexContent += gstr.ReplaceByMap(templateEditReqContent, g.MapStrStr{
 			"{EditReqContent}": generateEditReqDefinition(fieldMap),
 		})
+
+		indexContent += gstr.ReplaceByMap(templateDeleteReqContent,g.MapStrStr{
+			"{DeleteReqContent}": generateDeleteReqDefinition(fieldMap),
+		})
+
 		indexContent += gstr.ReplaceByMap(templateSelectPageReqContent, g.MapStrStr{
 			"{SelectPageReqContent}": generateSelectPageReqDefinition(fieldMap),
 		})
@@ -411,6 +415,52 @@ func generateEditReqDefinition(fieldMap map[string]*gdb.TableField) string {
 	buffer.WriteString(stContent)
 	buffer.WriteString("}")
 	return buffer.String()
+}
+
+//修改页面请求参数
+func generateDeleteReqDefinition(fieldMap map[string]*gdb.TableField) string {
+	buffer := bytes.NewBuffer(nil)
+	array := make([][]string, len(fieldMap))
+	for _, field := range fieldMap {
+	 if gstr.ContainsI(field.Key, "pri") {
+		 array[field.Index] = generateDeleteReqField(field)
+	}
+
+
+	}
+
+
+
+	tw := tablewriter.NewWriter(buffer)
+	tw.SetBorder(false)
+	tw.SetRowLine(false)
+	tw.SetAutoWrapText(false)
+	tw.SetColumnSeparator("")
+	tw.AppendBulk(array)
+	tw.Render()
+
+	stContent := buffer.String()
+	// Let's do this hack of table writer for indent!
+	stContent = gstr.Replace(stContent, "  #", "")
+	buffer.Reset()
+	buffer.WriteString("type DeleteReq struct {\n")
+	buffer.WriteString(stContent)
+	buffer.WriteString("}")
+	return buffer.String()
+}
+//修改页面请求参数
+func generateDeleteReqField(field *gdb.TableField) []string {
+	typeName, _, jsonTag, comment := handleTableField(field)
+	if typeName == "*gtime.Time" {
+		typeName = "string"
+	}
+	return []string{
+		"    #" + gstr.CamelCase(field.Name),
+		" #" + typeName,
+		" #" + fmt.Sprintf("`"+`p:"%s"`, jsonTag),
+		" #" + fmt.Sprintf(`v:"required#%s不能为空"`+"`", comment),
+		" #" + fmt.Sprintf(`// %s`, comment),
+	}
 }
 
 //分页请求参数
